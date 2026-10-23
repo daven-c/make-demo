@@ -28,24 +28,28 @@ The bundled scripts live next to this file in `scripts/`. In the commands below,
 
 ### 3. Script the recording
 Copy `scripts/record_demo.template.mjs` into the project (e.g. `frontend/scripts/record-demo.mjs`), add `playwright` as an exact-pinned dev dependency, and fill in `STEPS`. The template already handles:
-- **A visible cursor and caption bar.** Playwright recordings don't show the pointer; the template injects a fake cursor plus captions.
+- **Launch-video motion.** Everything animates inside the page at the display's frame rate: an arrow cursor that glides along a gentle eased arc, a ripple on each click, captions that slide and cross-fade, and intro/outro title cards (`CONFIG.intro` / `CONFIG.outro`).
+- **A camera.** `zoom(locator, level?)` eases the view in towards an element, and the target drifts towards the centre; `zoomOut()` pulls back. Zoom in for typing and small controls, and zoom out to reveal results. It scales `CONFIG.camera` (default `body`) with a CSS transform; if the app has `position: fixed` headers that misbehave while zoomed, point it at the app root (e.g. `#root`).
+- **Sharp 60 fps capture.** Frames come from the DevTools screencast at 2x device scale and are assembled into a constant-rate `raw.mp4`. Playwright's own `recordVideo` is 25 fps and blurry, so it isn't used. Recording starts after the page loads, so there's no blank flash to trim.
 - **Real mouse clicks at the element's centre.** `locator.click()` refuses when an overlay (a play icon, a tooltip) covers the target, while a real mouse click hits the overlay and bubbles like a user's would.
-- **Smooth `glide()` movement** and typing at a human pace (`pressSequentially` with a delay).
+- **Typing at a human pace**, with uneven per-key delays.
 - **Capturing tour steps**: a screenshot plus the hotspot box at every `click()` and `snap()` → `demo-out/tour/steps.json`.
-- **Writing a stable output name**, and removing the partial `page@*.webm` if a run fails.
+- **Clean output**: tour screenshots hide the overlays, and those frames are dropped from the video.
 
 Things the template can't decide for you:
 - **H.264/AAC media needs `channel: "chrome"`** (the installed Google Chrome). Playwright's bundled Chromium has no proprietary codecs, so videos would sit frozen.
 - **Warm the caches first** (thumbnails, first queries, model load) with a `warmUp()` that hits the API; otherwise the first seconds show spinners or empty cards.
+- **Pace it like a launch video.** Zoom in on the action, keep each beat to one idea, let results sit for 1–2 s, and end on the outro card. Too many zooms make viewers seasick; use about one per beat.
 - **Wait on UI state, not just sleeps**: wait for the results text or for images to be `complete`, then add a short sleep so viewers can read.
 - **Captions make claims, so keep them true.** Only state numbers that are measured and on screen or in the repo.
 
 ### 4. Record and verify (don't skip this)
 ```bash
-DEMO_URL=http://localhost:5173 node scripts/record-demo.mjs        # → demo-out/demo.webm + demo-out/tour/
-bash "$SKILL_DIR"/scripts/contact_sheet.sh demo-out/demo.webm   # → demo-out/sheet.png
+DEMO_URL=http://localhost:5173 node scripts/record-demo.mjs        # → demo-out/raw.mp4 + demo-out/tour/
+bash "$SKILL_DIR"/scripts/contact_sheet.sh demo-out/raw.mp4   # → demo-out/sheet.png
 ```
 Read the contact sheet image and check every beat. These failures actually happened and were invisible until frames were inspected:
+- **Motion**: sample one glide or zoom at 10–15 fps (`ffmpeg -ss T -t 1.5 -i raw.mp4 -vf fps=10,scale=640:-1,tile=4x4 -frames:v 1 m.png`) to check that it eases rather than jumping.
 - **Media that doesn't play**: the same timestamp across consecutive frames. This was an app bug, an effect calling `play()` before a portal-mounted `<video>` existed.
 - **Empty or black cards** from cold caches, or thumbnails taken at t=1 s (title cards are black).
 - **A "jump to match" landing on the wrong shot** because of range padding.
@@ -55,12 +59,11 @@ Fix real app bugs in the app, not by working around them in the script. Then re-
 
 ### 5. Encode
 ```bash
-bash "$SKILL_DIR"/scripts/encode.sh demo-out/demo.webm docs/    # → docs/demo.mp4, docs/demo.gif
+bash "$SKILL_DIR"/scripts/encode.sh demo-out/raw.mp4 docs/    # → docs/demo.mp4, docs/demo.gif
 ```
-- MP4: H.264 `crf 26`, `yuv420p`, `+faststart`. The script prints sizes and warns if the GIF is over 10 MB; if it is, shorten the demo or pass a smaller width/fps (`WIDTH=720 FPS=8`).
-- The first ~1 s of every Playwright recording is a blank/white page load. The recorder writes `recording.json` with the moment the app was ready, and `encode.sh` trims to it automatically (`START=0` keeps it).
-- Don't commit the raw `.webm`; gitignore it.
-- For a **portfolio card or autoplay preview**, trim the idle intro (`-ss 3`) and drop audio (`-an`) so it starts on action.
+- MP4: H.264 at 60 fps, 1920 px wide (`MP4_WIDTH`), `crf 24`, `yuv420p`, `+faststart`. GIF: 800 px at 15 fps. The script prints sizes and warns if the GIF is over 10 MB; if it is, shorten the demo or pass a smaller width/fps (`WIDTH=720 FPS=10`).
+- Don't commit `demo-out/` (the 2x master is large); gitignore it.
+- For a **portfolio card or autoplay preview**, `TRIM=3` also writes `demo-trimmed.mp4` without audio that starts past the title card.
 
 ### 6. Build the interactive tour
 ```bash

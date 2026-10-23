@@ -34,8 +34,8 @@ jobs:
           DEMO_CHANNEL="" node record-demo.mjs
       - run: |
           S=skills/make-demo/scripts
-          bash $S/contact_sheet.sh examples/todo-app/demo-out/demo.webm
-          bash $S/encode.sh examples/todo-app/demo-out/demo.webm out/
+          bash $S/contact_sheet.sh examples/todo-app/demo-out/raw.mp4
+          bash $S/encode.sh examples/todo-app/demo-out/raw.mp4 out/
           node $S/build_tour.mjs examples/todo-app/demo-out/tour out/tour.html --title "CI tour"
           test -s out/demo.mp4 && test -s out/demo.gif && test -s out/tour.html
       - uses: actions/upload-artifact@v4
