@@ -4,7 +4,7 @@ A [Claude Code](https://claude.com/claude-code) skill that makes product demos o
 
 ![Demo of the example app, recorded by make-demo](docs/demo.gif)
 
-<sub>Recorded from [`examples/todo-app`](examples/todo-app) by this skill · [MP4](docs/demo.mp4) · [interactive tour](https://daven-c.github.io/make-demo/tour.html)</sub>
+<sub>Recorded from [`examples/todo-app`](examples/todo-app) by this skill · [MP4](docs/demo.mp4) · [interactive tour](https://davenc.dev/make-demo/tour.html)</sub>
 
 | Format | Output | Use it for |
 |---|---|---|
