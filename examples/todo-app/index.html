@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasks</title>
+<style>
+	:root { --bg: #f6f7f9; --fg: #111827; --muted: #6b7280; --card: #fff; --line: #e5e7eb; --accent: #0d9488; }
+	@media (prefers-color-scheme: dark) {
+		:root { --bg: #0b0f14; --fg: #e5e7eb; --muted: #9ca3af; --card: #111827; --line: #1f2937; --accent: #2dd4bf; }
+	}
+	* { box-sizing: border-box; }
+	body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, sans-serif; }
+	main { max-width: 560px; margin: 64px auto; padding: 0 16px; }
+	h1 { font-size: 28px; margin: 0 0 4px; }
+	.sub { color: var(--muted); margin: 0 0 24px; }
+	form { display: flex; gap: 8px; }
+	input[type=text] { flex: 1; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card);
+		color: var(--fg); font: inherit; }
+	button { padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg);
+		font: inherit; cursor: pointer; }
+	button.primary { background: var(--accent); border-color: var(--accent); color: #04221f; font-weight: 600; }
+	.filters { display: flex; gap: 6px; margin: 18px 0 10px; }
+	.filters button[aria-pressed=true] { border-color: var(--accent); color: var(--accent); }
+	ul { list-style: none; padding: 0; margin: 0; }
+	li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 8px; background: var(--card);
+		border: 1px solid var(--line); border-radius: 10px; }
+	li.done span { text-decoration: line-through; color: var(--muted); }
+	li input { width: 18px; height: 18px; accent-color: var(--accent); }
+	.count { color: var(--muted); font-size: 14px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+	<h1>Tasks</h1>
+	<p class="sub">A tiny example app for the make-demo skill.</p>
+	<form id="add">
+		<input type="text" id="new" placeholder="What needs doing?" aria-label="New task" autocomplete="off">
+		<button class="primary">Add</button>
+	</form>
+	<div class="filters" role="group" aria-label="Filter">
+		<button data-filter="all" aria-pressed="true">All</button>
+		<button data-filter="open" aria-pressed="false">Open</button>
+		<button data-filter="done" aria-pressed="false">Done</button>
+	</div>
+	<ul id="list"></ul>
+	<p class="count" id="count"></p>
+</main>
+<script>
+const tasks = [
+	{ text: "Write the README", done: true },
+	{ text: "Record the demo", done: false },
+	{ text: "Ship v1.0", done: false },
+];
+let filter = "all";
+const $ = (id) => document.getElementById(id);
+
+function render() {
+	$("list").replaceChildren(...tasks
+		.filter((t) => filter === "all" || (filter === "done") === t.done)
+		.map((t) => {
+			const li = document.createElement("li");
+			li.className = t.done ? "done" : "";
+			const box = Object.assign(document.createElement("input"), { type: "checkbox", checked: t.done });
+			box.setAttribute("aria-label", t.text);
+			box.onchange = () => { t.done = box.checked; render(); };
+			const span = Object.assign(document.createElement("span"), { textContent: t.text });
+			li.append(box, span);
+			return li;
+		}));
+	const open = tasks.filter((t) => !t.done).length;
+	$("count").textContent = `${open} open · ${tasks.length - open} done`;
+}
+
+$("add").onsubmit = (e) => {
+	e.preventDefault();
+	const text = $("new").value.trim();
+	if (text) tasks.push({ text, done: false });
+	$("new").value = "";
+	render();
+};
+document.querySelectorAll("[data-filter]").forEach((b) => {
+	b.onclick = () => {
+		filter = b.dataset.filter;
+		document.querySelectorAll("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+		render();
+	};
+});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "make-demo-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "node serve.mjs",
+    "record": "node record-demo.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

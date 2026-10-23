@@ -1,0 +1,10 @@
+{
+  "name": "make-demo",
+  "version": "1.0.0",
+  "description": "Make product demos of your app from the real UI: an MP4, a README GIF and an interactive click-through tour, all from one scripted Playwright run.",
+  "author": { "name": "Daven", "url": "https://github.com/daven-c" },
+  "homepage": "https://github.com/daven-c/make-demo",
+  "repository": "https://github.com/daven-c/make-demo",
+  "license": "MIT",
+  "keywords": ["skill", "demo", "playwright", "gif", "screen-recording", "readme"]
+}

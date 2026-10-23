@@ -1,0 +1,46 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: shellcheck skills/make-demo/scripts/*.sh
+      - run: for f in skills/make-demo/scripts/*.mjs examples/todo-app/*.mjs; do node --check "$f"; done
+      - run: for f in .claude-plugin/*.json; do node -e "JSON.parse(require('fs').readFileSync('$f'))"; done
+
+  e2e:
+    # Record the example app end to end with bundled Chromium (the example has no H.264 media)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - working-directory: examples/todo-app
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          node serve.mjs 5173 &
+          sleep 1
+          DEMO_CHANNEL="" node record-demo.mjs
+      - run: |
+          S=skills/make-demo/scripts
+          bash $S/contact_sheet.sh examples/todo-app/demo-out/demo.webm
+          bash $S/encode.sh examples/todo-app/demo-out/demo.webm out/
+          node $S/build_tour.mjs examples/todo-app/demo-out/tour out/tour.html --title "CI tour"
+          test -s out/demo.mp4 && test -s out/demo.gif && test -s out/tour.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demo
+          path: |
+            out/
+            examples/todo-app/demo-out/sheet.png

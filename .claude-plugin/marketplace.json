@@ -1,0 +1,14 @@
+{
+  "name": "make-demo",
+  "owner": { "name": "Daven", "url": "https://github.com/daven-c" },
+  "metadata": { "description": "The make-demo skill for Claude Code." },
+  "plugins": [
+    {
+      "name": "make-demo",
+      "source": "./",
+      "description": "Skill: record an MP4, README GIF and interactive tour of your app with Playwright.",
+      "version": "1.0.0",
+      "category": "skill"
+    }
+  ]
+}
