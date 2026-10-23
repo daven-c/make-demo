@@ -76,6 +76,16 @@ This produces one HTML file with the screenshots inlined as JPEG data URIs (typi
 - **`docs/DEMO.md`:** credits and licenses for the media, plus the exact commands to reproduce the recording: download, transcode, index, run, record, encode.
 - **Portfolio site:** use the trimmed MP4 and a poster frame that tells the story (an input with its results, not an empty screen). Deploying a personal site is outward-facing: commit, preview locally, and **confirm before pushing**.
 
+## Reporting problems with this skill
+If something in **the skill itself** is wrong, report it so it can be fixed for everyone. Examples: a bundled script crashes or produces bad output, an instruction here is wrong or out of date, or a pitfall is missing from this file. Bugs in the user's own app, or in their environment (no ffmpeg, a port already in use), are not skill bugs.
+
+1. **Write a minimal reproduction** in a temporary file: what you ran (script and arguments), what you expected, what happened (the exact error or a description of the bad frames), and the smallest fix you can see. Leave out secrets, private data, the user's app code, file paths that reveal names, and anything from their screen.
+2. **Preview it**: `bash "$SKILL_DIR"/scripts/report_issue.sh --title "<script>: <symptom>" --body-file <file>`. This adds the environment (versions of the skill, OS, Node, Playwright, ffmpeg and Chrome) and lists similar existing issues. If one already covers it, tell the user and link it instead of filing a duplicate.
+3. **Ask the user before filing.** Issues on GitHub are public and filed under their account. Show them the title and body, and say that it will be public.
+4. **Only after they agree**, re-run with `--submit`. Without `gh`, the script prints a prefilled link for the user to open instead.
+
+Don't let a report block the user's task. Work around the problem first and report it at a natural pause.
+
 ## Shell pitfalls (zsh is the default on macOS)
 - **Quote `?` in ffmpeg maps** (`-map '0:a:0?'`), or zsh treats it as a glob and fails with "no matches found".
 - **No implicit word splitting**: `set -- $var` and unquoted `$cfg` don't split in zsh. Pass arguments explicitly, or run the bundled bash scripts.

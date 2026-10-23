@@ -7,7 +7,7 @@
       "name": "make-demo",
       "source": "./",
       "description": "Skill: record an MP4, README GIF and interactive tour of your app with Playwright.",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "skill"
     }
   ]

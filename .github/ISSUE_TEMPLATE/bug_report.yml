@@ -1,0 +1,24 @@
+name: Bug report
+description: A script fails, produces bad output, or SKILL.md gives wrong advice
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command you ran, what you expected, and what happened instead. Paste errors as text.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The smallest setup that shows it. A contact sheet or frames help with video problems.
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Node, Playwright, ffmpeg and Chrome versions
+      placeholder: macOS 26.1, Node 22.18, Playwright 1.63.0, ffmpeg 8.0, Chrome 156
+    validations:
+      required: true

@@ -75,10 +75,14 @@ Then run the contact sheet, encode and tour commands above on `examples/todo-app
 .claude-plugin/          plugin + marketplace manifests
 skills/make-demo/
   SKILL.md               the skill Claude follows
-  scripts/               recorder template, contact sheet, encoder, tour builder
+  scripts/               recorder template, contact sheet, encoder, tour builder, issue reporter
 examples/todo-app/       a tiny app with a filled-in recorder
 docs/                    the demo above (GIF, MP4, tour) — also served by GitHub Pages
 ```
+
+## Contributing
+
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). When an agent running the skill hits a bug in the skill itself, it drafts an issue with [`report_issue.sh`](skills/make-demo/scripts/report_issue.sh). The agent shows you the draft and files it only if you agree. Security reports go through [SECURITY.md](SECURITY.md).
 
 ## License
 
