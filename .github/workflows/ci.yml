@@ -42,7 +42,7 @@ jobs:
           bash $S/encode.sh examples/todo-app/demo-out/raw.mp4 out/
           node $S/build_tour.mjs examples/todo-app/demo-out/tour out/tour.html --title "CI tour"
           test -s out/demo.mp4 && test -s out/demo.gif && test -s out/tour.html
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: demo
           path: |
