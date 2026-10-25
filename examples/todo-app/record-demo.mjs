@@ -46,7 +46,7 @@ async function warmUp() {
 // The story. Each step sets a caption and runs actions through the helpers:
 //   click(locator, note?)   eased cursor glide + real mouse click; records a tour step (screenshot + hotspot)
 //   type(locator, text)     click into a field and type at a human pace
-//   zoom(locator, level?)   smoothly zoom the camera towards an element (stays zoomed until zoomOut)
+//   zoom(locator, level?)   smoothly zoom towards an element, capped so it fits (stays zoomed until zoomOut)
 //   zoomOut()               smoothly return to the full view
 //   snap(note)              record a tour step with no hotspot (e.g. a results view)
 //   caption(text|null)      set or hide the caption
@@ -225,38 +225,49 @@ const overlay = ({ accent, camera, ripples }) => {
 		card.classList.toggle("text", text);
 	};
 
-	// Camera: scale the app's root about an origin chosen so the target drifts towards the centre.
-	// The origin stays inside the visible area, so the zoomed page always covers the viewport.
-	const cam = { s: 1, ox: 0, oy: 0 };
-	window.__camera = (vx, vy, s, ms) => new Promise((done) => {
+	// Camera: one translate+scale transform on the app's root, animated on the compositor. (Animating
+	// transform-origin alongside transform runs on the main thread and visibly jumps at the end.)
+	// The zoom is capped so the target fits with a margin, the target drifts halfway towards the
+	// centre, and the zoomed page always covers the viewport.
+	const cam = { s: 1, tx: 0, ty: 0 };
+	window.__camera = async (box, level, ms) => {
 		const root = document.querySelector(camera) ?? document.body;
 		const r = root.getBoundingClientRect();
-		const left = r.left - cam.ox * (1 - cam.s), top = r.top - cam.oy * (1 - cam.s); // untransformed box
-		let { ox, oy } = cam;
-		if (s !== 1) {
-			const qx = (vx - left - cam.ox) / cam.s + cam.ox, qy = (vy - top - cam.oy) / cam.s + cam.oy;
-			const tx = (left + qx + innerWidth / 2) / 2, ty = (top + qy + innerHeight / 2) / 2;
-			const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-			ox = clamp((tx - left - s * qx) / (1 - s), -left, innerWidth - left);
-			oy = clamp((ty - top - s * qy) / (1 - s), -top, innerHeight - top);
+		const L = r.left - cam.tx, T = r.top - cam.ty; // the root's untransformed top-left
+		const W = innerWidth, H = innerHeight, clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+		let s = 1, tx = 0, ty = 0;
+		if (box && level > 1) {
+			// the box in untransformed viewport coordinates
+			const bx = L + (box.x - r.left) / cam.s, by = T + (box.y - r.top) / cam.s;
+			const bw = box.width / cam.s, bh = box.height / cam.s;
+			s = Math.min(level, (W * 0.86) / bw, (H * 0.7) / bh);
+			if (s < 1.08) s = 1; // too big to zoom on usefully
+			// screen point = L + tx + s * (P - L); aim the box centre halfway to the viewport centre
+			const axis = (b, len, origin, view) => {
+				const c = b + len / 2;
+				let t = (c + view / 2) / 2 - origin - s * (c - origin);
+				const m = Math.min(24, (view - s * len) / 2); // keep the whole box on screen
+				t = clamp(t, m - origin - s * (b - origin), view - m - origin - s * (b + len - origin));
+				return clamp(t, -(s - 1) * (view - origin), (s - 1) * origin); // no blank edges
+			};
+			if (s !== 1) {
+				tx = axis(bx, bw, L, W);
+				ty = axis(by, bh, T, H);
+			}
 		}
-		if (cam.s === 1) {
-			// set the origin while unscaled (invisible), then animate only the scale
-			root.style.transition = "none";
-			root.style.transformOrigin = `${ox}px ${oy}px`;
-			root.style.transform = "scale(1)";
-			root.getBoundingClientRect();
+		if (!root.style.transform) {
+			if (s === 1) return;
+			// promote the root to its own layer first; otherwise the first frames of the zoom stall
+			Object.assign(root.style, { transition: "none", transformOrigin: "0 0", willChange: "transform", transform: "translate(0px, 0px) scale(1)" });
+			await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 		}
-		root.style.transition = `transform ${ms}ms ${ease}, transform-origin ${ms}ms ${ease}`;
-		root.style.transformOrigin = `${ox}px ${oy}px`;
-		root.style.transform = `scale(${s})`;
-		Object.assign(cam, { s, ox, oy });
-		setTimeout(() => {
-			// a transform makes the root a containing block for position:fixed; drop it when unzoomed
-			if (s === 1) Object.assign(root.style, { transition: "", transform: "", transformOrigin: "" });
-			done();
-		}, ms + 40);
-	});
+		root.style.transition = `transform ${ms}ms ${ease}`;
+		root.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+		Object.assign(cam, { s, tx, ty });
+		await new Promise((r) => setTimeout(r, ms + 40));
+		// a transform makes the root a containing block for position:fixed; drop it when unzoomed
+		if (s === 1) Object.assign(root.style, { transition: "", transform: "", transformOrigin: "", willChange: "" });
+	};
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -392,10 +403,10 @@ async function recordVideo(browser) {
 		if (!CONFIG.zoom) return;
 		const box = await locator.boundingBox();
 		if (!box) throw new Error("zoom: element not visible");
-		await page.evaluate(([x, y, s, ms]) => window.__camera(x, y, s, ms), [box.x + box.width / 2, box.y + box.height / 2, level, paced(1000)]);
+		await page.evaluate(([box, s, ms]) => window.__camera(box, s, ms), [box, level, paced(1000)]);
 	}
 
-	const zoomOut = () => CONFIG.zoom && page.evaluate((ms) => window.__camera(0, 0, 1, ms), paced(1000));
+	const zoomOut = () => CONFIG.zoom && page.evaluate((ms) => window.__camera(null, 1, ms), paced(1000));
 
 	let currentCaption = "";
 	async function caption(text) {
@@ -427,7 +438,7 @@ async function recordVideo(browser) {
 			await step.run(helpers);
 		}
 		await caption(null);
-		await page.evaluate(() => window.__camera(0, 0, 1, 800));
+		await page.evaluate(() => window.__camera(null, 1, 800));
 		if (CONFIG.outro) {
 			await card({ ...CONFIG.outro, on: true, text: false });
 			await sleep(450);
