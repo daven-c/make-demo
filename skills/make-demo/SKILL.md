@@ -1,6 +1,7 @@
 ---
 name: make-demo
-description: Make a product demo of an app the user is building, in up to three formats - an MP4 video, an inline README/portfolio GIF, and an interactive click-through HTML walkthrough - by scripting the real app with Playwright. Use when the user asks for a demo, walkthrough, screen recording, README GIF, product tour, or a demo for a portfolio site, resume, or launch.
+description: Make a product demo of an app the user is building, in up to four formats - an MP4 video, an inline README/portfolio GIF, an interactive click-through HTML walkthrough, and clean screenshots of every page and main feature - by scripting the real app with Playwright. Use when the user asks for a demo, walkthrough, screen recording, README GIF, product tour, app screenshots, or a demo for a portfolio site, resume, or launch.
+argument-hint: "[style directive, e.g. quick cuts, clean transitions, no zoom]"
 ---
 
 # Making demos
@@ -12,19 +13,39 @@ A good demo is recorded from the **real app**, driven by a **script** (so it can
 | **MP4** | `demo.mp4` | Portfolio sites, LinkedIn, Slack, GitHub *attachments* | Best quality per MB (a 48 s 720p demo ≈ 2 MB). GitHub READMEs do **not** play an MP4 from a repo path, only from an uploaded `user-attachments` URL. |
 | **GIF** | `demo.gif` | Inline in READMEs, issues and PRs from a repo path | Large (≈10 MB for 45 s at 800 px/10 fps). Keep it under 10 MB and link the MP4 under it. |
 | **Interactive** | `tour.html` | Anywhere a link works: portfolio, Artifact, GitHub Pages | A single self-contained page. The viewer clicks highlighted hotspots to step through real screenshots with captions. It's skimmable, accessible, and light. |
+| **Screenshots** | `screenshots/*.png` | Docs, app store and launch listings, portfolio galleries, PR descriptions | Full-resolution (2x) stills of every page and main feature, in light and dark, with no cursor, caption or zoom. |
 
 The bundled scripts live next to this file in `scripts/`. In the commands below, `$SKILL_DIR` means this skill's base directory (the folder holding this `SKILL.md`); substitute the real path.
+
+## Style directive
+Directive from the user (may be empty): `$ARGUMENTS`
+
+The user may pass a free-form style directive with the command (`/make-demo quick changing, clean transitions with no zoom`) or say one in the request. It overrides the defaults in this file wherever they conflict. Translate it into the template's CONFIG and into how you write `STEPS`, and repeat back how you read it in one line before recording. Common phrases:
+
+| Directive | CONFIG | In `STEPS` |
+|---|---|---|
+| quick, snappy, fast-paced | `pace: 0.6` | 3–4 beats, 20–30 s total, short captions |
+| relaxed, slow, calm | `pace: 1.3` | |
+| no zoom, static camera | `zoom: false` | don't call `zoom()`; `zoomOut()` is a no-op anyway |
+| clean, minimal, subtle | `ripples: false` | one caption per beat, at most one zoom per beat |
+| no title cards, straight in | `intro: null`, `outro: null` | |
+| no captions | | leave `caption` off every step |
+| short, loop, GIF-friendly | `pace: 0.7`, `intro: null` | under 20 s, ending on a frame that loops back to the start |
+
+`pace` scales cursor glides, zooms, typing, title-card holds and every `wait()`, so write `wait()` values for the default pace and let `pace` do the rest. For anything the table doesn't cover, pick the closest CONFIG change or step pattern. If a directive conflicts with a hard rule (truthful captions, safe content), the rule wins; tell the user.
 
 ## Workflow
 
 ### 1. Decide the formats and the content
-- Ask which formats the user wants if it's unclear. The default is all three: MP4 + GIF for the README, the tour for the portfolio.
+- Ask which formats the user wants if it's unclear. The default is MP4 + GIF for the README, the tour for the portfolio, and screenshots of every page. If they only want screenshots, skip the story and run `DEMO_ONLY=screenshots`.
 - **Content must be safe to publish.** A demo is public redistribution. Never show research-only datasets (e.g. MSR-VTT or other YouTube-sourced data), private user data, real customer records, or secrets. Use openly licensed media (e.g. Blender Foundation open movies, CC BY) or synthetic data, and credit it in the demo's docs as the license requires.
 - **Ask before downloading** media or tools: state each file, its source, and its size.
 - Load the demo content into an **isolated data dir or instance** (for example a `DATA_DIR=.../demo` environment variable), never the user's real library. Gitignore it.
 
 ### 2. Plan the story (30–60 s)
 3–5 beats, each showing one capability, ending on proof (benchmarks, results, scale). Pick inputs that **produce impressive, correct results**: run candidate queries or actions first and look at the outputs (render a contact sheet of the results) before scripting them. Drop anything that's only "kind of right".
+
+The screenshot list is wider than the story: it should cover **every page** and **each main feature in its most telling state**. Find the pages from the router (route files, `<Route>`s, `pages/`/`app/` dirs, nav links) and the features from the nav, README and main components. Show features with real content (a dialog open, a form filled, results loaded), not empty states, unless the empty state is the point.
 
 ### 3. Script the recording
 Copy `scripts/record_demo.template.mjs` into the project (e.g. `frontend/scripts/record-demo.mjs`), add `playwright` as an exact-pinned dev dependency, and fill in `STEPS`. The template already handles:
@@ -35,11 +56,12 @@ Copy `scripts/record_demo.template.mjs` into the project (e.g. `frontend/scripts
 - **Typing at a human pace**, with uneven per-key delays.
 - **Capturing tour steps**: a screenshot plus the hotspot box at every `click()` and `snap()` → `demo-out/tour/steps.json`.
 - **Clean output**: tour screenshots hide the overlays, and those frames are dropped from the video.
+- **Screenshots** in a separate pass: each `SHOTS` entry (`{ name, path?, run?, fullPage? }`) loads in a fresh tab with no overlays, `run` reaches the state to show, and a 2x PNG is saved per color scheme in `CONFIG.shotSchemes` → `demo-out/screenshots/NN-name-scheme.png`. Animations are frozen and the caret is hidden. Set `DEMO_ONLY=screenshots` (or `video`) to re-run one pass.
 
 Things the template can't decide for you:
 - **H.264/AAC media needs `channel: "chrome"`** (the installed Google Chrome). Playwright's bundled Chromium has no proprietary codecs, so videos would sit frozen.
 - **Warm the caches first** (thumbnails, first queries, model load) with a `warmUp()` that hits the API; otherwise the first seconds show spinners or empty cards.
-- **Pace it like a launch video.** Zoom in on the action, keep each beat to one idea, let results sit for 1–2 s, and end on the outro card. Too many zooms make viewers seasick; use about one per beat.
+- **Pace it like a launch video** (unless the style directive says otherwise). Zoom in on the action, keep each beat to one idea, let results sit for 1–2 s, and end on the outro card. Too many zooms make viewers seasick; use about one per beat.
 - **Wait on UI state, not just sleeps**: wait for the results text or for images to be `complete`, then add a short sleep so viewers can read.
 - **Captions make claims, so keep them true.** Only state numbers that are measured and on screen or in the repo.
 
@@ -48,7 +70,7 @@ Things the template can't decide for you:
 DEMO_URL=http://localhost:5173 node scripts/record-demo.mjs        # → demo-out/raw.mp4 + demo-out/tour/
 bash "$SKILL_DIR"/scripts/contact_sheet.sh demo-out/raw.mp4   # → demo-out/sheet.png
 ```
-Read the contact sheet image and check every beat. These failures actually happened and were invisible until frames were inspected:
+Read the contact sheet image and check every beat. Also open each screenshot in `demo-out/screenshots/` and check it shows the intended state (loaded data, not a spinner; the dialog fully open; nothing private) in both color schemes. These failures actually happened and were invisible until frames were inspected:
 - **Motion**: sample one glide or zoom at 10–15 fps (`ffmpeg -ss T -t 1.5 -i raw.mp4 -vf fps=10,scale=640:-1,tile=4x4 -frames:v 1 m.png`) to check that it eases rather than jumping.
 - **Media that doesn't play**: the same timestamp across consecutive frames. This was an app bug, an effect calling `play()` before a portal-mounted `<video>` existed.
 - **Empty or black cards** from cold caches, or thumbnails taken at t=1 s (title cards are black).
@@ -62,7 +84,7 @@ Fix real app bugs in the app, not by working around them in the script. Then re-
 bash "$SKILL_DIR"/scripts/encode.sh demo-out/raw.mp4 docs/    # → docs/demo.mp4, docs/demo.gif
 ```
 - MP4: H.264 at 60 fps, 1920 px wide (`MP4_WIDTH`), `crf 24`, `yuv420p`, `+faststart`. GIF: 800 px at 15 fps. The script prints sizes and warns if the GIF is over 10 MB; if it is, shorten the demo or pass a smaller width/fps (`WIDTH=720 FPS=10`).
-- Don't commit `demo-out/` (the 2x master is large); gitignore it.
+- Don't commit `demo-out/` (the 2x master is large); gitignore it. Copy the screenshots you want to keep into `docs/screenshots/`; if PNGs are too large for the repo, convert with `sips -s format jpeg` (macOS) or `ffmpeg -i in.png -q:v 3 out.jpg`.
 - For a **portfolio card or autoplay preview**, `TRIM=3` also writes `demo-trimmed.mp4` without audio that starts past the title card.
 
 ### 6. Build the interactive tour
@@ -72,7 +94,7 @@ node "$SKILL_DIR"/scripts/build_tour.mjs demo-out/tour docs/tour.html --title "M
 This produces one HTML file with the screenshots inlined as JPEG data URIs (typically 0.5–2 MB). It has a pulsing hotspot on each click target, captions, arrow-key/space navigation, progress dots, and light/dark theme support. Open it and click through it before publishing. To share it as a hosted page, publish it with the Artifact tool or put it on GitHub Pages.
 
 ### 7. Publish
-- **README:** put the GIF right under the title, then a `<sub>` line with links to the MP4 and the how-it's-made doc, plus media credits.
+- **README:** put the GIF right under the title, then a `<sub>` line with links to the MP4 and the how-it's-made doc, plus media credits. A screenshot gallery (a table of thumbnails linking to `docs/screenshots/`) works well further down.
 - **`docs/DEMO.md`:** credits and licenses for the media, plus the exact commands to reproduce the recording: download, transcode, index, run, record, encode.
 - **Portfolio site:** use the trimmed MP4 and a poster frame that tells the story (an input with its results, not an empty screen). Deploying a personal site is outward-facing: commit, preview locally, and **confirm before pushing**.
 

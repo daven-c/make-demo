@@ -1,6 +1,6 @@
 # make-demo
 
-A [Claude Code](https://claude.com/claude-code) skill that makes product demos of the app you're building. It records the **real app** with a **Playwright script** and **checks the frames** before anything ships. One recording produces three formats:
+A [Claude Code](https://claude.com/claude-code) skill that makes product demos of the app you're building. It records the **real app** with a **Playwright script** and **checks the frames** before anything ships. One recording produces four formats:
 
 ![Demo of the example app, recorded by make-demo](docs/demo.gif)
 
@@ -11,6 +11,7 @@ A [Claude Code](https://claude.com/claude-code) skill that makes product demos o
 | **MP4** | `demo.mp4` | Portfolio sites, LinkedIn, Slack, launch posts. 60 fps, 1080p, best quality per MB. |
 | **GIF** | `demo.gif` | Inline in READMEs, issues and PRs. |
 | **Interactive tour** | `tour.html` | A single self-contained page: viewers click highlighted hotspots to step through real screenshots with captions. |
+| **Screenshots** | `screenshots/*.png` | Clean 2x stills of every page and main feature, in light and dark, for docs, listings and galleries. |
 
 ## Install
 
@@ -28,7 +29,13 @@ git clone https://github.com/daven-c/make-demo.git
 cp -R make-demo/skills/make-demo ~/.claude/skills/
 ```
 
-Then ask Claude for "a demo of this app", "a README GIF" or "a product tour". You can also invoke `/make-demo` directly.
+Then ask Claude for "a demo of this app", "a README GIF" or "a product tour". You can also invoke `/make-demo` directly, optionally with a style directive:
+
+```
+/make-demo quick changing, clean transitions with no zoom
+```
+
+The skill maps it onto the recorder's settings (`pace`, `zoom: false`, `ripples`, title cards) and the length and rhythm of the story.
 
 ### Requirements
 
