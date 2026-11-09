@@ -1,4 +1,6 @@
 node_modules/
-demo-out/
 *.webm
 .DS_Store
+demo-out*/
+skills/make-demo/remotion/public/
+skills/make-demo/remotion/out/

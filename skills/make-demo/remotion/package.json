@@ -1,0 +1,16 @@
+{
+  "name": "make-demo-remotion",
+  "private": true,
+  "type": "module",
+  "description": "Optional styled composer for make-demo: restyles a clean recording (raw.mp4 + timeline.json) with Remotion.",
+  "dependencies": {
+    "@remotion/cli": "4.0.542",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.542"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}

@@ -31,6 +31,9 @@ const CONFIG = {
 	ripples: true, // ring at each click
 	camera: "body", // element zoom() scales; use your app root (e.g. "#root") if fixed headers misbehave
 	accent: "#14b8a6",
+	// DEMO_CLEAN=1 records bare footage (no cursor, ripples, captions, cards or camera baked in) and
+	// writes timeline.json (glides, clicks, zooms, captions) for the Remotion composer to restyle.
+	clean: process.env.DEMO_CLEAN === "1",
 	intro: { title: "Tasks", subtitle: "A tiny task list, demoed by make-demo" }, // title card; null to skip
 	shotSchemes: ["light", "dark"], // color schemes to screenshot each SHOTS entry in
 	shotFullPage: true, // capture the whole scrollable page; a SHOTS entry can override with fullPage
@@ -271,6 +274,52 @@ const overlay = ({ accent, camera, ripples }) => {
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Runs in the page: the app's own colours, for the composer's "auto" theme. Colours are normalised through a
+// canvas, so any CSS colour syntax (rgb, oklch, color-mix...) works. The accent is the most saturated mid-tone
+// colour weighted by how much screen it covers (buttons and large fills beat small text).
+const extractPalette = () => {
+	const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+	const rgba = (css) => {
+		ctx.clearRect(0, 0, 1, 1);
+		ctx.fillStyle = "#000";
+		ctx.fillStyle = css;
+		ctx.fillRect(0, 0, 1, 1);
+		const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+		return { r, g, b, a: a / 255 };
+	};
+	const hex = ({ r, g, b }) => "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+	const hsl = ({ r, g, b }) => {
+		const mx = Math.max(r, g, b) / 255, mn = Math.min(r, g, b) / 255, l = (mx + mn) / 2, d = mx - mn;
+		return { l, s: d ? d / (1 - Math.abs(2 * l - 1)) : 0 };
+	};
+	let bg = { r: 255, g: 255, b: 255 };
+	for (const el of [document.body, document.documentElement]) {
+		const c = rgba(getComputedStyle(el).backgroundColor);
+		if (c.a > 0.9) { bg = c; break; }
+	}
+	const text = rgba(getComputedStyle(document.body).color);
+	const scores = new Map();
+	for (const el of [...document.body.querySelectorAll("*")].slice(0, 800)) {
+		const r = el.getBoundingClientRect();
+		if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > innerHeight) continue;
+		const cs = getComputedStyle(el);
+		const area = Math.min(r.width * r.height, 40000);
+		for (const [css, weight] of [[cs.backgroundColor, Math.sqrt(area)], [cs.color, 6], [parseFloat(cs.borderTopWidth) > 0 ? cs.borderTopColor : "transparent", 6], [cs.accentColor === "auto" ? "transparent" : cs.accentColor, 40]]) {
+			const c = rgba(css);
+			if (c.a < 0.6) continue;
+			const { l, s } = hsl(c);
+			if (s < 0.35 || l < 0.2 || l > 0.82) continue;
+			const key = hex(c);
+			scores.set(key, (scores.get(key) ?? 0) + s * weight);
+		}
+	}
+	const accent = [...scores].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+	return { bg: hex(bg), text: hex(text), accent };
+};
+// Clean mode: what happened and when. Times are epoch seconds here; rebased to the video's t=0 at the end.
+const events = [];
+let palette = null;
+const mark = (type, data = {}) => events.push({ at: Date.now() / 1000, type, ...data });
 const paced = (ms) => Math.round(ms * CONFIG.pace);
 const run = promisify(execFile);
 
@@ -331,11 +380,12 @@ async function recordVideo(browser) {
 		deviceScaleFactor: CONFIG.scale,
 		colorScheme: CONFIG.colorScheme,
 	});
-	await context.addInitScript(overlay, { accent: CONFIG.accent, camera: CONFIG.camera, ripples: CONFIG.ripples });
+	if (!CONFIG.clean) await context.addInitScript(overlay, { accent: CONFIG.accent, camera: CONFIG.camera, ripples: CONFIG.ripples });
 	const page = await context.newPage();
 
 	const tour = [];
 	let capture;
+	let cursorAt = { x: CONFIG.size.width / 2, y: CONFIG.size.height * 0.72 }; // clean mode: where the cursor is
 
 	// Tour screenshots hide the fake cursor and caption; the tour draws its own hotspot and text.
 	async function snap(note, box = null) {
@@ -371,10 +421,14 @@ async function recordVideo(browser) {
 		const box = await locator.boundingBox();
 		if (!box) throw new Error("glide: element not visible");
 		const x = box.x + box.width / 2, y = box.y + box.height / 2;
-		const from = await page.evaluate(() => document.getElementById("demo-cursor")?.style.transform);
-		const [fx, fy] = (from?.match(/-?[\d.]+/g) ?? [x, y]).map(Number);
+		const from = CONFIG.clean ? null : await page.evaluate(() => document.getElementById("demo-cursor")?.style.transform);
+		const [fx, fy] = CONFIG.clean ? [cursorAt.x, cursorAt.y] : (from?.match(/-?[\d.]+/g) ?? [x, y]).map(Number);
 		const ms = paced(Math.min(1100, Math.max(450, 380 + Math.hypot(x - fx, y - fy) * 0.55)));
-		await page.evaluate(([x, y, ms]) => window.__glide(x, y, ms), [x, y, ms]);
+		if (CONFIG.clean) {
+			mark("glide", { from: { x: fx, y: fy }, to: { x, y }, ms });
+			await sleep(ms);
+			cursorAt = { x, y };
+		} else await page.evaluate(([x, y, ms]) => window.__glide(x, y, ms), [x, y, ms]);
 		await page.mouse.move(x, y); // the real pointer follows, for hover states and the click
 		return box;
 	}
@@ -386,6 +440,7 @@ async function recordVideo(browser) {
 		if (note !== false) await snap(note, box);
 		await sleep(paced(140));
 		await page.mouse.down();
+		mark("click", { x: box.x + box.width / 2, y: box.y + box.height / 2, box });
 		await sleep(90);
 		await page.mouse.up();
 	}
@@ -403,18 +458,30 @@ async function recordVideo(browser) {
 		if (!CONFIG.zoom) return;
 		const box = await locator.boundingBox();
 		if (!box) throw new Error("zoom: element not visible");
+		if (CONFIG.clean) {
+			mark("zoom", { box, level, ms: paced(1000) });
+			return sleep(paced(1000) + 40);
+		}
 		await page.evaluate(([box, s, ms]) => window.__camera(box, s, ms), [box, level, paced(1000)]);
 	}
 
-	const zoomOut = () => CONFIG.zoom && page.evaluate((ms) => window.__camera(null, 1, ms), paced(1000));
+	const zoomOut = async () => {
+		if (!CONFIG.zoom) return;
+		if (CONFIG.clean) {
+			mark("zoom", { box: null, level: 1, ms: paced(1000) });
+			return sleep(paced(1000) + 40);
+		}
+		await page.evaluate((ms) => window.__camera(null, 1, ms), paced(1000));
+	};
 
 	let currentCaption = "";
 	async function caption(text) {
 		currentCaption = text ?? "";
+		if (CONFIG.clean) return mark("caption", { text: text ?? null });
 		await page.evaluate((t) => window.__caption(t), text);
 	}
 
-	const card = (opts) => page.evaluate((o) => window.__card(o), opts);
+	const card = (opts) => CONFIG.clean ? null : page.evaluate((o) => window.__card(o), opts);
 	const helpers = { page, click, type, snap, caption, glide, zoom, zoomOut, wait: (ms) => sleep(paced(ms)) };
 
 	try {
@@ -423,10 +490,12 @@ async function recordVideo(browser) {
 		await page.waitForLoadState("load");
 		await sleep(500); // let the first paint settle; steps should still wait on their own UI state
 		await page.mouse.move(CONFIG.size.width / 2, CONFIG.size.height * 0.72);
-		if (CONFIG.intro) await card({ ...CONFIG.intro, on: true, text: false, instant: true });
+		if (CONFIG.clean) palette = await page.evaluate(extractPalette);
+		const cards = CONFIG.intro && !CONFIG.clean; // clean mode: the composer draws the title cards
+		if (cards) await card({ ...CONFIG.intro, on: true, text: false, instant: true });
 		// capture starts after load, so the video never shows a blank page
 		capture = await startCapture(page, framesDir);
-		if (CONFIG.intro) {
+		if (cards) {
 			await sleep(300);
 			await card({ on: true, text: true });
 			await sleep(paced(2200));
@@ -438,8 +507,8 @@ async function recordVideo(browser) {
 			await step.run(helpers);
 		}
 		await caption(null);
-		await page.evaluate(() => window.__camera(null, 1, 800));
-		if (CONFIG.outro) {
+		if (!CONFIG.clean) await page.evaluate(() => window.__camera(null, 1, 800));
+		if (CONFIG.outro && !CONFIG.clean) {
 			await card({ ...CONFIG.outro, on: true, text: false });
 			await sleep(450);
 			await card({ on: true, text: true });
@@ -449,6 +518,18 @@ async function recordVideo(browser) {
 		const captured = await capture.stop();
 		await assemble(captured, framesDir, out);
 		const seconds = captured.end - captured.frames[0].t;
+		if (CONFIG.clean) {
+			const t0 = captured.frames[0].t; // the video's t=0
+			const timeline = {
+				size: CONFIG.size, fps: CONFIG.fps, duration: seconds, accent: CONFIG.accent,
+				intro: CONFIG.intro, outro: CONFIG.outro, zoom: CONFIG.zoom,
+				palette: palette && { ...palette, accent: palette.accent ?? CONFIG.accent },
+				start: { x: CONFIG.size.width / 2, y: CONFIG.size.height * 0.72 },
+				events: events.map(({ at, ...e }) => ({ t: +(at - t0).toFixed(3), ...e })),
+			};
+			await writeFile(path.join(CONFIG.outDir, "timeline.json"), JSON.stringify(timeline, null, 2) + "\n");
+			console.log(`timeline: ${events.length} events`);
+		}
 		console.log(`recorded ${out} (${seconds.toFixed(1)} s, ${(captured.frames.length / seconds).toFixed(0)} fps captured)`);
 	} finally {
 		await context.close();

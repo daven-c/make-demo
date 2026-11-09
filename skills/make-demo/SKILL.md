@@ -93,6 +93,21 @@ node "$SKILL_DIR"/scripts/build_tour.mjs demo-out/tour docs/tour.html --title "M
 ```
 This produces one HTML file with the screenshots inlined as JPEG data URIs (typically 0.5–2 MB). It has a pulsing hotspot on each click target, captions, arrow-key/space navigation, progress dots, and light/dark theme support. Open it and click through it before publishing. To share it as a hosted page, publish it with the Artifact tool or put it on GitHub Pages.
 
+### 6b. Styled video with Remotion (optional, prototype)
+The default MP4 has the cursor, captions, title cards and camera baked into the page, so every demo looks alike. For a more designed look, record **clean** and let Remotion draw all of that:
+```bash
+DEMO_CLEAN=1 DEMO_ONLY=video DEMO_OUT=demo-out-clean node scripts/record-demo.mjs   # → raw.mp4 (bare footage) + timeline.json
+bash "$SKILL_DIR"/scripts/compose.sh demo-out-clean docs/demo-styled.mp4 device 60 auto   # → 1080p styled MP4
+```
+- `timeline.json` records what happened and when, in video seconds: cursor glides, clicks (with element boxes), zooms, captions. The composition in `$SKILL_DIR/remotion/` turns it into motion, so the camera, cursor and captions are re-drawn rather than recorded, and can be restyled without re-recording.
+- Presets live in `remotion/src/presets/`; `device` is a floating browser window over a themed backdrop, with a camera push-in, a spotlight on what's being zoomed, a drawn cursor and click ripples, word-by-word captions and kinetic title cards. Add a preset by exporting a component and registering it in `src/Demo.tsx`. Motion math (camera, cursor path, caption spans) is in `src/model.ts` and is shared.
+- **Themes** (`remotion/src/themes.tsx`, last argument of `compose.sh`): `auto` (default), `paper` (warm off-white), `studio` (near-black, one soft light), `dusk` (a fixed designed gradient). Backgrounds are flat and deliberate, never a glowing blob mix.
+  - `auto` is built from the app's own palette: a clean recording samples the page's background, text and brand colour into `timeline.json` (`palette`). The theme then makes a tonal, single-hue backdrop that contrasts with the app (a dark app gets a pale tint of its brand hue, a light app a deep one) and uses the brand colour for ripples, the spotlight ring and the caption underline. If the sampled accent is wrong (it takes the most saturated mid-tone weighted by screen area), edit `palette` in `timeline.json` or pick a fixed theme.
+  - Add a theme by exporting a `Theme` (or a `(palette) => Theme`) in `themes.tsx`.
+- Title cards come from `CONFIG.intro` / `CONFIG.outro`; clean mode doesn't record them. The accent colour seeds the palette.
+- First run runs `npm install` in `remotion/`. Remotion downloads its own headless Chrome unless `REMOTION_CHROME` points at an installed one. **Ask before installing.** Remotion's licence is free for individuals and small teams but needs a paid company licence above that: check the current terms before using it commercially.
+- Check it like any other cut: render a few stills first (`npx remotion still src/index.ts Demo out.png --props=public/props.json --frame=N`) and verify the footage and timeline are in sync (the typed text should appear after the click, not before).
+
 ### 7. Publish
 - **README:** put the GIF right under the title, then a `<sub>` line with links to the MP4 and the how-it's-made doc, plus media credits. A screenshot gallery (a table of thumbnails linking to `docs/screenshots/`) works well further down.
 - **`docs/DEMO.md`:** credits and licenses for the media, plus the exact commands to reproduce the recording: download, transcode, index, run, record, encode.
